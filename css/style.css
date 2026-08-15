@@ -284,6 +284,21 @@ footer.foot {
   filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.45));
 }
 
+.piece.selecting,
+.piece.selected {
+  filter: drop-shadow(0 0 5px #4da3ff) drop-shadow(0 0 2px #4da3ff) drop-shadow(1px 2px 3px rgba(0,0,0,0.45));
+}
+
+.selection-box {
+  position: absolute;
+  top: 0; left: 0;
+  border: 1px dashed rgba(120,180,255,0.9);
+  background: rgba(77,163,255,0.15);
+  pointer-events: none;
+  z-index: 8000;
+  display: none;
+}
+
 .remote-cursor {
   position: absolute;
   top: 0; left: 0;

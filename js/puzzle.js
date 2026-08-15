@@ -33,6 +33,7 @@ class Puzzle {
     this.pieces = new Map(); // id -> peça
     this.groups = new Map(); // groupId -> Set(pieceId) — sempre recalculado, nunca sincronizado
     this.pieceGroup = new Map(); // pieceId -> groupId
+    this.selected = new Set(); // seleção por retângulo (só local, não sincroniza)
     this.zTop = 10;
 
     this._buildEdges();
@@ -176,11 +177,33 @@ class Puzzle {
     return null;
   }
 
+  _clearSelection() {
+    for (const id of this.selected) {
+      const p = this.pieces.get(id);
+      if (p) p.el.classList.remove('selected');
+    }
+    this.selected.clear();
+  }
+
+  /** Une o conjunto de peças selecionadas com quem estiver encaixado em cada uma delas. */
+  _expandWithGroups(idSet) {
+    const result = new Set();
+    for (const id of idSet) {
+      const gid = this.pieceGroup.get(id);
+      const grp = this.groups.get(gid);
+      if (grp) for (const mid of grp) result.add(mid);
+      else result.add(id);
+    }
+    return [...result];
+  }
+
   _attachGlobalDrag() {
     let dragging = false;
+    let selecting = false;
     let activeId = null;
     let pointerId = null;
     let startX, startY, origins;
+    let selStartX, selStartY, selectionBoxEl;
 
     // converte coordenadas de tela (px reais) pra coordenadas lógicas do tabuleiro,
     // desfazendo a escala visual aplicada via CSS transform no tableEl
@@ -189,20 +212,67 @@ class Puzzle {
       return { x: (ev.clientX - rect.left) / this.scale, y: (ev.clientY - rect.top) / this.scale };
     };
 
+    const ensureSelectionBox = () => {
+      if (!selectionBoxEl) {
+        selectionBoxEl = document.createElement('div');
+        selectionBoxEl.className = 'selection-box';
+        this.tableEl.appendChild(selectionBoxEl);
+      }
+      return selectionBoxEl;
+    };
+
+    const updateSelectionBox = (x0, y0, x1, y1) => {
+      const box = ensureSelectionBox();
+      const left = Math.min(x0, x1), top = Math.min(y0, y1);
+      const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
+      box.style.width = w + 'px';
+      box.style.height = h + 'px';
+      box.style.display = 'block';
+      return { left, top, right: left + w, bottom: top + h };
+    };
+
+    const applyLiveSelection = (rect) => {
+      for (const p of this.pieces.values()) {
+        const cx = p.x + this.canvasW / 2, cy = p.y + this.canvasH / 2;
+        const inside = cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom;
+        p.el.classList.toggle('selecting', inside);
+      }
+    };
+
     this.tableEl.addEventListener('pointerdown', (ev) => {
       const { x, y } = tableXY(ev);
       const hit = this._hitTest(x, y);
-      if (!hit) return;
+      pointerId = ev.pointerId;
+
+      if (!hit) {
+        // clicou/segurou numa área vazia: começa a seleção por retângulo (laço)
+        ev.preventDefault();
+        selecting = true;
+        selStartX = x; selStartY = y;
+        try { this.tableEl.setPointerCapture(pointerId); } catch (e) {}
+        updateSelectionBox(x, y, x, y);
+        return;
+      }
+
       ev.preventDefault();
       dragging = true;
       activeId = hit.id;
-      pointerId = ev.pointerId;
       try { this.tableEl.setPointerCapture(pointerId); } catch (e) {}
       this.tableEl.style.cursor = 'grabbing';
       startX = ev.clientX;
       startY = ev.clientY;
-      const groupId = this.pieceGroup.get(hit.id);
-      const members = [...this.groups.get(groupId)];
+
+      let members;
+      if (this.selected.has(hit.id) && this.selected.size > 1) {
+        // a peça clicada faz parte da seleção atual: arrasta a seleção inteira
+        members = this._expandWithGroups(this.selected);
+      } else {
+        this._clearSelection();
+        const groupId = this.pieceGroup.get(hit.id);
+        members = [...this.groups.get(groupId)];
+      }
       origins = members.map(mid => {
         const p = this.pieces.get(mid);
         return { id: mid, x: p.x, y: p.y };
@@ -212,6 +282,12 @@ class Puzzle {
     });
 
     this.tableEl.addEventListener('pointermove', (ev) => {
+      if (selecting) {
+        const { x, y } = tableXY(ev);
+        const rect = updateSelectionBox(selStartX, selStartY, x, y);
+        applyLiveSelection(rect);
+        return;
+      }
       if (!dragging) {
         const { x, y } = tableXY(ev);
         this.tableEl.style.cursor = this._hitTest(x, y) ? 'grab' : 'default';
@@ -238,6 +314,20 @@ class Puzzle {
     });
 
     const endDrag = (ev) => {
+      if (selecting) {
+        selecting = false;
+        try { this.tableEl.releasePointerCapture(pointerId); } catch (e) {}
+        if (selectionBoxEl) selectionBoxEl.style.display = 'none';
+        this._clearSelection();
+        for (const p of this.pieces.values()) {
+          if (p.el.classList.contains('selecting')) {
+            p.el.classList.remove('selecting');
+            p.el.classList.add('selected');
+            this.selected.add(p.id);
+          }
+        }
+        return;
+      }
       if (!dragging) return;
       dragging = false;
       this.tableEl.style.cursor = 'default';
