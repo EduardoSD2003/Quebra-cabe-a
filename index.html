@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quebra-Cabeça Online</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="brand"><span class="piece-icon">🧩</span> Quebra-Cabeça Online</a>
+</header>
+
+<main>
+  <div class="lobby-wrap">
+    <div class="lobby-hero">
+      <h1>Monte quebra-cabeças com seus amigos</h1>
+      <p>Envie uma foto, escolha a dificuldade e mande o link para um amigo montar junto com você, em tempo real.</p>
+    </div>
+
+    <div id="setupWarning"></div>
+
+    <div class="card">
+      <h2>➕ Criar uma nova sala</h2>
+
+      <div class="name-field">
+        <label class="field-label" for="playerName1">Seu nome</label>
+        <input type="text" id="playerName1" placeholder="Como seu amigo vai te ver" maxlength="20">
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <div id="dropzoneContent">
+          <div style="font-size:34px;">🖼️</div>
+          <div><strong>Clique ou arraste uma imagem aqui</strong></div>
+          <div class="hint">JPG ou PNG, até ~8MB</div>
+        </div>
+        <img id="previewImg" style="display:none;">
+        <input type="file" id="fileInput" accept="image/*" style="display:none;">
+      </div>
+
+      <div class="field-row">
+        <label class="field-label" for="difficulty">Dificuldade</label>
+        <select id="difficulty">
+          <option value="4x3">Fácil (12 peças)</option>
+          <option value="6x4" selected>Médio (24 peças)</option>
+          <option value="8x6">Difícil (48 peças)</option>
+          <option value="10x7">Muito difícil (70 peças)</option>
+        </select>
+        <span class="actions-right">
+          <button id="createBtn" disabled>Criar sala e obter link</button>
+        </span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔗 Entrar em uma sala existente</h2>
+      <div class="name-field">
+        <label class="field-label" for="playerName2">Seu nome</label>
+        <input type="text" id="playerName2" placeholder="Como seu amigo vai te ver" maxlength="20">
+      </div>
+      <div class="join-row">
+        <input type="text" id="joinCode" placeholder="Cole aqui o link ou o código da sala">
+        <button id="joinBtn" class="secondary">Entrar</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="foot">Feito para jogar com amigos, sem custo. As peças são geradas no seu navegador a partir da imagem que você enviar.</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/config.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/lobby.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sala de Quebra-Cabeça</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="brand"><span class="piece-icon">🧩</span> Quebra-Cabeça Online</a>
+  <div class="room-info">
+    <div class="players" id="playersBox"></div>
+  </div>
+</header>
+
+<div class="game-toolbar">
+  <div class="progress" id="progressText">Carregando peças…</div>
+  <div class="link-box">
+    <span>Convide um amigo:</span>
+    <code id="shareLink"></code>
+    <button id="copyBtn" style="padding:4px 10px;font-size:12px;">Copiar</button>
+  </div>
+</div>
+
+<main>
+  <div class="table-scroll" id="tableScroll">
+    <div class="table" id="table">
+      <div class="board-frame" id="boardFrame"></div>
+    </div>
+  </div>
+</main>
+
+<div id="loadingOverlay" class="spinner-overlay">Carregando sala…</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/config.js"></script>
+<script src="js/piece-shapes.js"></script>
+<script src="js/puzzle.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/room.js"></script>
+</body>
+</html>
