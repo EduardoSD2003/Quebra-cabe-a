@@ -51,10 +51,22 @@ async function setupGame(room, sync, overlay) {
   const tableScroll = document.getElementById('tableScroll');
 
   const boardW = room.board_w, boardH = room.board_h;
-  // área lógica onde as peças ficam espalhadas (fixa pra todo mundo, garante
-  // que a sincronização de posição faça sentido em qualquer tamanho de tela)
-  const tableW = Math.max(boardW * 1.7, boardW + 380);
-  const tableH = Math.max(boardH * 1.6, boardH + 280);
+  // área lógica onde as peças ficam espalhadas. O tamanho mínimo é definido
+  // pelo tabuleiro (+ uma margem pra ter onde espalhar peças), mas o lado que
+  // sobrar é esticado pra bater com a proporção da tela de quem abriu a sala —
+  // assim a área de arrastar usa 100% do espaço visível, sem sobrar faixa
+  // cinza vazia dos lados ou embaixo.
+  const minTableW = boardW + 380;
+  const minTableH = boardH + 280;
+  const viewportAspect = (tableScroll.clientWidth || 4) / (tableScroll.clientHeight || 3);
+  let tableW, tableH;
+  if (minTableW / minTableH > viewportAspect) {
+    tableW = minTableW;
+    tableH = minTableW / viewportAspect;
+  } else {
+    tableH = minTableH;
+    tableW = minTableH * viewportAspect;
+  }
   table.style.width = tableW + 'px';
   table.style.height = tableH + 'px';
 
