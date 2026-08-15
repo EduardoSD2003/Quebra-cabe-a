@@ -16,7 +16,6 @@
 </header>
 
 <div class="game-toolbar">
-  <div class="progress" id="progressText">Carregando peças…</div>
   <div class="link-box">
     <span>Convide um amigo:</span>
     <code id="shareLink"></code>
@@ -27,8 +26,18 @@
 <main>
   <div class="table-scroll" id="tableScroll">
     <div class="table" id="table"></div>
+    <img id="ghostImage" class="ghost-overlay" alt="Imagem de referência">
   </div>
 </main>
+
+<footer class="game-footer">
+  <button id="ghostToggle" class="footer-btn" title="Ver imagem de referência" aria-pressed="false">👻</button>
+  <div class="footer-stats">
+    <span id="percentText">0%</span>
+    <span class="sep">·</span>
+    <span id="timerText">00:00</span>
+  </div>
+</footer>
 
 <div id="loadingOverlay" class="spinner-overlay">Carregando sala…</div>
 

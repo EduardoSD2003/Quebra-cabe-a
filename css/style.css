@@ -236,11 +236,6 @@ footer.foot {
   flex-wrap: wrap;
 }
 
-.game-toolbar .progress {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
 .game-toolbar .link-box {
   display: flex;
   align-items: center;
@@ -292,6 +287,9 @@ footer.foot {
 .remote-cursor {
   position: absolute;
   top: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   pointer-events: none;
   z-index: 9999;
   transition: transform .08s linear;
@@ -304,8 +302,65 @@ footer.foot {
   padding: 2px 6px;
   border-radius: 4px;
   white-space: nowrap;
-  margin-left: 10px;
+  margin-top: 2px;
+  margin-left: 12px;
 }
+
+.ghost-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 65%;
+  max-height: 65%;
+  object-fit: contain;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 5000;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  display: none;
+}
+
+.ghost-overlay.visible { display: block; }
+
+.game-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 20px;
+  background: #26282b;
+  color: #e8e8e8;
+  border-top: 1px solid #000;
+}
+
+.footer-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.footer-btn:hover { background: rgba(255,255,255,0.16); }
+
+.footer-btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+}
+
+.footer-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.footer-stats .sep { opacity: 0.4; }
 
 .win-banner {
   position: fixed;

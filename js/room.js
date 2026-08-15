@@ -56,10 +56,11 @@ async function initRoom() {
     tableEl: table,
     onPieceMoved: (pieces, dragging) => {
       if (suppressEmit) return;
+      startTimerIfNeeded();
       sync.broadcastMove(pieces, dragging);
       updateProgress();
     },
-    onComplete: () => showWinBanner(),
+    onComplete: () => { stopTimer(); showWinBanner(); },
   });
 
   // escala a mesa inteira (via CSS) pra caber na tela sem precisar rolar,
@@ -132,11 +133,51 @@ async function initRoom() {
     sync.broadcastCursor((e.clientX - rect.left) / puzzle.scale, (e.clientY - rect.top) / puzzle.scale);
   });
 
+  // ===== imagem-fantasma de referência =====
+  const ghostImage = document.getElementById('ghostImage');
+  const ghostToggle = document.getElementById('ghostToggle');
+  ghostImage.src = room.image;
+  ghostToggle.addEventListener('click', () => {
+    const visible = ghostImage.classList.toggle('visible');
+    ghostToggle.setAttribute('aria-pressed', visible ? 'true' : 'false');
+  });
+
+  // ===== cronômetro pessoal =====
+  let startTime = null;
+  let timerInterval = null;
+  let finished = false;
+
+  function startTimerIfNeeded() {
+    if (startTime || finished) return;
+    startTime = Date.now();
+    updateTimerDisplay();
+    timerInterval = setInterval(updateTimerDisplay, 1000);
+  }
+
+  function updateTimerDisplay() {
+    if (!startTime) return;
+    document.getElementById('timerText').textContent = formatTime(Date.now() - startTime);
+  }
+
+  function stopTimer() {
+    finished = true;
+    updateTimerDisplay();
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+  }
+
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
   function updateProgress() {
     const total = puzzle.pieces.size;
     const biggest = puzzle.largestGroupSize();
-    document.getElementById('progressText').textContent =
-      biggest >= total ? `Quebra-cabeça completo!` : `Maior grupo encaixado: ${biggest} / ${total} peças`;
+    const percent = total > 1 ? Math.round(((biggest - 1) / (total - 1)) * 100) : 100;
+    document.getElementById('percentText').textContent = `${percent}%`;
   }
 
   function showWinBanner() {
@@ -144,7 +185,8 @@ async function initRoom() {
     const div = document.createElement('div');
     div.className = 'win-banner';
     div.id = 'winBanner';
-    div.innerHTML = `<div class="box"><h2>🎉 Quebra-cabeça completo!</h2><p>Vocês montaram tudo. Bom trabalho em equipe!</p><button onclick="document.getElementById('winBanner').remove()">Fechar</button></div>`;
+    const time = document.getElementById('timerText').textContent;
+    div.innerHTML = `<div class="box"><h2>🎉 Quebra-cabeça completo!</h2><p>Vocês montaram tudo em ${time}. Bom trabalho em equipe!</p><button onclick="document.getElementById('winBanner').remove()">Fechar</button></div>`;
     document.body.appendChild(div);
   }
 
