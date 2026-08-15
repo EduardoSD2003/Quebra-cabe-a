@@ -190,7 +190,10 @@ class Puzzle {
       this.groups.set(id, new Set([id]));
       this.pieceGroup.set(id, id);
     }
-    for (const piece of this.pieces.values()) {
+    // ordem fixa (linha, coluna) — não a ordem de inserção do Map — pra dar
+    // sempre o mesmo resultado em qualquer cliente, mesmo corrigindo posições
+    const ordered = [...this.pieces.values()].sort((a, b) => a.r - b.r || a.c - b.c);
+    for (const piece of ordered) {
       for (const n of this._gridNeighbors(piece.r, piece.c)) {
         const np = this.pieces.get(n.id);
         const expectedX = np.x - n.dc * this.pieceW;
@@ -198,7 +201,18 @@ class Puzzle {
         if (Math.hypot(expectedX - piece.x, expectedY - piece.y) < this.snapTolerance) {
           const gA = this.pieceGroup.get(piece.id);
           const gB = this.pieceGroup.get(n.id);
-          if (gA !== gB) this._mergeGroups(gA, gB);
+          if (gA !== gB) {
+            // alinha o grupo da peça exatamente com o vizinho antes de unir —
+            // sem isso, duas peças podiam virar "um grupo só" (mover juntas)
+            // mesmo estando visualmente alguns pixels fora do encaixe certo.
+            const shiftX = expectedX - piece.x;
+            const shiftY = expectedY - piece.y;
+            for (const mid of this.groups.get(gA)) {
+              const mp = this.pieces.get(mid);
+              this._setPiecePos(mp, mp.x + shiftX, mp.y + shiftY);
+            }
+            this._mergeGroups(gA, gB);
+          }
         }
       }
     }
