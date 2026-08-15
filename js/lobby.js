@@ -1,6 +1,9 @@
 // Lógica da tela inicial: upload de imagem, criação e entrada em sala.
 
-const MAX_IMG_DIM = 1100;
+// Maior que antes pra dar detalhe suficiente por peça nos quebra-cabeças com
+// muitas peças (até 1500) — ainda gera um arquivo leve o bastante pro plano
+// gratuito do Supabase.
+const MAX_IMG_DIM = 1800;
 
 let selectedImageDataUrl = null;
 
