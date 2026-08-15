@@ -52,30 +52,40 @@ async function setupGame(room, sync, overlay) {
 
   const boardW = room.board_w, boardH = room.board_h;
   const totalPieces = room.rows * room.cols;
-  const { canvasW: pieceCanvasW } = computePieceSize(boardW, boardH, room.rows, room.cols);
 
-  // A mesa (área onde as peças podem ficar) sempre acaba preenchendo 100% da
-  // tela depois do ajuste de escala — o que muda o quanto cada peça aparece
-  // "grande" é o tamanho LÓGICO dessa mesa: uma mesa menor = peças relativamente
-  // maiores. Por isso o tamanho é baseado na quantidade de peças (poucas peças
-  // grandes não precisam de uma mesa muito maior que o próprio tabuleiro; muitas
-  // peças pequenas se beneficiam de bem mais espaço pra espalhar).
-  const viewportAspect = (tableScroll.clientWidth || 4) / (tableScroll.clientHeight || 3);
-  const boardArea = boardW * boardH;
-  const expansion = 1.1 + 0.045 * Math.sqrt(totalPieces);
-  const idealArea = boardArea * expansion;
+  // Calcula o tamanho lógico ideal da mesa (área onde as peças podem ficar)
+  // pra caber bem na tela ATUAL. Precisa ser recalculado toda vez que o
+  // ajuste de escala roda de novo (fontes/imagens carregando, redimensionar
+  // a janela) — se só a escala fosse reaplicada mas o tamanho lógico da mesa
+  // ficasse travado com uma proporção antiga, sobraria uma margem vazia.
+  function computeTableSize(availW, availH) {
+    const viewportAspect = availW / availH;
+    const boardArea = boardW * boardH;
+    // A mesa sempre acaba preenchendo 100% da tela depois da escala — o que
+    // muda o quanto cada peça aparece "grande" é o tamanho lógico da mesa:
+    // uma mesa menor deixa as peças relativamente maiores e mais próximas.
+    // Por isso o tamanho é baseado na quantidade de peças (poucas peças
+    // grandes não precisam de uma mesa muito maior que o tabuleiro; muitas
+    // peças pequenas se beneficiam de bem mais espaço pra espalhar).
+    const expansion = 1.1 + 0.045 * Math.sqrt(totalPieces);
+    const idealArea = boardArea * expansion;
+    const minTableW = boardW + 60, minTableH = boardH + 60;
+    const wFromBoard = Math.max(minTableW, minTableH * viewportAspect);
+    const wFromDensity = Math.sqrt(idealArea * viewportAspect);
+    // nunca tão pequena a ponto da peça precisar ser ampliada demais (borra)
+    const wFromScaleCap = availW / 1.3;
+    const w = Math.max(wFromBoard, wFromDensity, wFromScaleCap);
+    return { tableW: w, tableH: w / viewportAspect };
+  }
 
-  // nunca menor que o tabuleiro montado + uma pequena margem
-  const minTableW = boardW + 60, minTableH = boardH + 60;
-  const wFromBoard = Math.max(minTableW, minTableH * viewportAspect);
-  const wFromDensity = Math.sqrt(idealArea * viewportAspect);
-  // nunca tão pequena a ponto da peça precisar ser ampliada demais (borra)
-  const wFromScaleCap = (tableScroll.clientWidth || pieceCanvasW * 4) / 1.3;
-
-  const tableW = Math.max(wFromBoard, wFromDensity, wFromScaleCap);
-  const tableH = tableW / viewportAspect;
-  table.style.width = tableW + 'px';
-  table.style.height = tableH + 'px';
+  // define um tamanho inicial (mesmo que aproximado) já de cara, pra garantir
+  // que a mesa nunca fique com largura/altura zero caso o primeiro ajuste de
+  // escala precise esperar o layout terminar de assentar
+  {
+    const fallback = computeTableSize(tableScroll.clientWidth || 1200, tableScroll.clientHeight || 700);
+    table.style.width = fallback.tableW + 'px';
+    table.style.height = fallback.tableH + 'px';
+  }
 
   let suppressEmit = false;
 
@@ -92,8 +102,9 @@ async function setupGame(room, sync, overlay) {
     onComplete: () => { stopTimer(); showWinBanner(); },
   });
 
-  // escala a mesa inteira (via CSS) pra caber na tela sem precisar rolar,
-  // não importa quantas peças o quebra-cabeça tenha
+  // Recalcula o tamanho lógico da mesa E a escala juntos, sempre a partir do
+  // tamanho ATUAL da tela — assim a proporção da mesa nunca fica "desatualizada"
+  // em relação à proporção real da tela (o que deixaria uma margem vazia).
   function fitToScreen() {
     const availW = tableScroll.clientWidth;
     const availH = tableScroll.clientHeight;
@@ -103,13 +114,14 @@ async function setupGame(room, sync, overlay) {
       requestAnimationFrame(fitToScreen);
       return;
     }
+    const { tableW, tableH } = computeTableSize(availW, availH);
+    table.style.width = tableW + 'px';
+    table.style.height = tableH + 'px';
     const scale = Math.min(availW / tableW, availH / tableH);
     table.style.transform = `scale(${scale})`;
     table.style.transformOrigin = 'top left';
-    // centraliza a mesa escalada dentro da área visível
-    const scaledW = tableW * scale, scaledH = tableH * scale;
-    table.style.marginLeft = Math.max(0, (availW - scaledW) / 2) + 'px';
-    table.style.marginTop = Math.max(0, (availH - scaledH) / 2) + 'px';
+    table.style.marginLeft = '0px';
+    table.style.marginTop = '0px';
     puzzle.setScale(scale);
   }
   fitToScreen();
