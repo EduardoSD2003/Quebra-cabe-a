@@ -33,6 +33,16 @@ async function initRoom() {
     setTimeout(() => document.getElementById('copyBtn').textContent = 'Copiar', 1500);
   });
 
+  try {
+    await setupGame(room, sync, overlay);
+  } catch (err) {
+    console.error(err);
+    overlay.style.display = 'flex';
+    overlay.textContent = 'Não foi possível carregar o quebra-cabeça. Tente recarregar a página (Ctrl+Shift+R).';
+  }
+}
+
+async function setupGame(room, sync, overlay) {
   const image = new Image();
   image.src = room.image;
   await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
@@ -68,6 +78,12 @@ async function initRoom() {
   function fitToScreen() {
     const availW = tableScroll.clientWidth;
     const availH = tableScroll.clientHeight;
+    // se a área ainda não tem tamanho (layout não assentou / aba em segundo
+    // plano), não aplica escala 0 — tenta de novo no próximo quadro
+    if (availW < 10 || availH < 10) {
+      requestAnimationFrame(fitToScreen);
+      return;
+    }
     const scale = Math.min(availW / tableW, availH / tableH);
     table.style.transform = `scale(${scale})`;
     table.style.transformOrigin = 'top left';
@@ -78,6 +94,7 @@ async function initRoom() {
     puzzle.setScale(scale);
   }
   fitToScreen();
+  requestAnimationFrame(fitToScreen); // reaplica depois do primeiro layout completo (fontes/imagens)
   window.addEventListener('resize', fitToScreen);
 
   // carrega estado salvo ou espalha as peças pela primeira vez
