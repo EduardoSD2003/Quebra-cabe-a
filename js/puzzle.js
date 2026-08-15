@@ -106,11 +106,10 @@ class Puzzle {
 
   /** Espalha as peças aleatoriamente dentro da área lógica do tableEl. */
   scatter() {
-    const tableW = this.tableEl.clientWidth || this.boardW * 1.6;
-    const tableH = this.tableEl.clientHeight || this.boardH * 1.5;
+    const { minX, maxX, minY, maxY } = this._dragBounds();
     for (const piece of this.pieces.values()) {
-      const x = Math.random() * Math.max(0, tableW - this.canvasW);
-      const y = Math.random() * Math.max(0, tableH - this.canvasH);
+      const x = minX + Math.random() * Math.max(0, maxX - minX);
+      const y = minY + Math.random() * Math.max(0, maxY - minY);
       this._setPiecePos(piece, x, y);
     }
   }
@@ -121,10 +120,20 @@ class Puzzle {
     piece.el.style.transform = `translate(${x}px, ${y}px)`;
   }
 
-  _tableBounds() {
+  /**
+   * Limites de onde uma peça pode ficar. Vai um pouco além da área visível
+   * (não totalmente pra fora) — assim as peças cobrem o espaço cinza até nas
+   * bordas da tela, em vez de deixar uma moldura vazia onde nenhuma peça
+   * alcança.
+   */
+  _dragBounds() {
+    const tableW = this.tableEl.clientWidth || this.boardW * 1.6;
+    const tableH = this.tableEl.clientHeight || this.boardH * 1.5;
+    const overflowX = this.canvasW * 0.35;
+    const overflowY = this.canvasH * 0.35;
     return {
-      w: this.tableEl.clientWidth || this.boardW * 1.6,
-      h: this.tableEl.clientHeight || this.boardH * 1.5,
+      minX: -overflowX, maxX: tableW - this.canvasW + overflowX,
+      minY: -overflowY, maxY: tableH - this.canvasH + overflowY,
     };
   }
 
@@ -297,15 +306,15 @@ class Puzzle {
       let dx = (ev.clientX - startX) / this.scale;
       let dy = (ev.clientY - startY) / this.scale;
 
-      // não deixa o grupo arrastado sair da área de jogo
-      const { w: tableW, h: tableH } = this._tableBounds();
+      // não deixa o grupo arrastado sair (de vez) da área de jogo
+      const bounds = this._dragBounds();
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (const o of origins) {
         minX = Math.min(minX, o.x); maxX = Math.max(maxX, o.x);
         minY = Math.min(minY, o.y); maxY = Math.max(maxY, o.y);
       }
-      dx = Math.min(Math.max(dx, -minX), Math.max(0, tableW - this.canvasW - maxX));
-      dy = Math.min(Math.max(dy, -minY), Math.max(0, tableH - this.canvasH - maxY));
+      dx = Math.min(Math.max(dx, bounds.minX - minX), bounds.maxX - maxX);
+      dy = Math.min(Math.max(dy, bounds.minY - minY), bounds.maxY - maxY);
 
       for (const o of origins) {
         const p = this.pieces.get(o.id);
