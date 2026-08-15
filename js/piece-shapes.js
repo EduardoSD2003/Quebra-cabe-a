@@ -73,13 +73,14 @@ function addEdge(path, x1, y1, x2, y2, tab, jitter) {
   };
 
   const t1 = 0.30 + jitter, t2 = 0.70 + jitter;
-  const head = 0.26;
+  const head = 0.28;
+  const shoulder = 0.20;
 
   const A = pt(t1, 0);
   const B1 = pt(t1 + 0.08, 0.06);
-  const B2 = pt(0.42, head);
+  const B2 = pt(0.40, shoulder);
   const P1 = pt(0.5, head);
-  const B3 = pt(0.58, head);
+  const B3 = pt(0.60, shoulder);
   const B4 = pt(t2 - 0.08, 0.06);
   const A2 = pt(t2, 0);
 
@@ -95,8 +96,8 @@ function buildPiecePath(pieceW, pieceH, pad, tabs) {
   const path = [`M ${x0} ${y0}`];
   addEdge(path, x0, y0, x1, y0, tabs.top, tabs.jTop);
   addEdge(path, x1, y0, x1, y1, tabs.right, tabs.jRight);
-  addEdge(path, x1, y1, x0, y1, -tabs.bottom, -tabs.jBottom);
-  addEdge(path, x0, y1, x0, y0, -tabs.left, -tabs.jLeft);
+  addEdge(path, x1, y1, x0, y1, tabs.bottom, -tabs.jBottom);
+  addEdge(path, x0, y1, x0, y0, tabs.left, -tabs.jLeft);
   path.push('Z');
   return path.join(' ');
 }
