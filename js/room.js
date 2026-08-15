@@ -38,27 +38,22 @@ async function initRoom() {
   await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
 
   const table = document.getElementById('table');
-  const boardFrame = document.getElementById('boardFrame');
   const tableScroll = document.getElementById('tableScroll');
 
   const boardW = room.board_w, boardH = room.board_h;
-  const tableW = Math.max(boardW * 1.9, boardW + 400);
-  const tableH = Math.max(boardH * 1.7, boardH + 300);
+  // área lógica onde as peças ficam espalhadas (fixa pra todo mundo, garante
+  // que a sincronização de posição faça sentido em qualquer tamanho de tela)
+  const tableW = Math.max(boardW * 1.7, boardW + 380);
+  const tableH = Math.max(boardH * 1.6, boardH + 280);
   table.style.width = tableW + 'px';
   table.style.height = tableH + 'px';
-
-  const boardLeft = 40, boardTop = 40;
-  boardFrame.style.left = boardLeft + 'px';
-  boardFrame.style.top = boardTop + 'px';
-  boardFrame.style.width = boardW + 'px';
-  boardFrame.style.height = boardH + 'px';
 
   let suppressEmit = false;
 
   const puzzle = new Puzzle({
     image, rows: room.rows, cols: room.cols,
     boardW, boardH, seed: room.seed,
-    tableEl: table, boardFrameEl: boardFrame,
+    tableEl: table,
     onPieceMoved: (pieces, dragging) => {
       if (suppressEmit) return;
       sync.broadcastMove(pieces, dragging);
@@ -67,11 +62,23 @@ async function initRoom() {
     onComplete: () => showWinBanner(),
   });
 
-  // reposiciona pieces para considerar o deslocamento do quadro (boardLeft/boardTop)
-  for (const p of puzzle.pieces.values()) {
-    p.correctX += boardLeft;
-    p.correctY += boardTop;
+  // escala a mesa inteira (via CSS) pra caber na tela sem precisar rolar,
+  // não importa quantas peças o quebra-cabeça tenha
+  function fitToScreen() {
+    const availW = tableScroll.clientWidth;
+    const availH = tableScroll.clientHeight;
+    const scale = Math.min(availW / tableW, availH / tableH);
+    table.style.transform = `scale(${scale})`;
+    table.style.transformOrigin = 'top left';
+    // centraliza a mesa escalada dentro da área visível
+    const scaledW = tableW * scale, scaledH = tableH * scale;
+    table.style.marginLeft = Math.max(0, (availW - scaledW) / 2) + 'px';
+    table.style.marginTop = Math.max(0, (availH - scaledH) / 2) + 'px';
+    puzzle.setScale(scale);
   }
+  fitToScreen();
+  window.addEventListener('resize', fitToScreen);
+
   // carrega estado salvo ou espalha as peças pela primeira vez
   if (room.pieces && room.pieces.length > 0) {
     suppressEmit = true;
@@ -89,7 +96,7 @@ async function initRoom() {
 
   sync.onPeerMove = (pieces) => {
     suppressEmit = true;
-    for (const p of pieces) puzzle.applyRemote(p.id, p.x, p.y, p.groupId, p.locked);
+    for (const p of pieces) puzzle.applyRemote(p.id, p.x, p.y, p.groupId);
     suppressEmit = false;
     updateProgress();
   };
@@ -122,13 +129,14 @@ async function initRoom() {
 
   tableScroll.addEventListener('pointermove', (e) => {
     const rect = table.getBoundingClientRect();
-    sync.broadcastCursor(e.clientX - rect.left, e.clientY - rect.top);
+    sync.broadcastCursor((e.clientX - rect.left) / puzzle.scale, (e.clientY - rect.top) / puzzle.scale);
   });
 
   function updateProgress() {
     const total = puzzle.pieces.size;
-    const done = [...puzzle.pieces.values()].filter(p => p.locked).length;
-    document.getElementById('progressText').textContent = `${done} / ${total} peças encaixadas`;
+    const biggest = puzzle.largestGroupSize();
+    document.getElementById('progressText').textContent =
+      biggest >= total ? `Quebra-cabeça completo!` : `Maior grupo encaixado: ${biggest} / ${total} peças`;
   }
 
   function showWinBanner() {

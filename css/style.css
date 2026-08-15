@@ -13,14 +13,25 @@
 
 * { box-sizing: border-box; }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Verdana, Arial, sans-serif;
   color: var(--text-dark);
   background: #eee7d8;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* a tela de lobby (fora da sala de jogo) pode rolar normalmente */
+body:has(.lobby-wrap) {
+  overflow: auto;
+  height: auto;
+  min-height: 100%;
 }
 
 header.topbar {
@@ -80,7 +91,7 @@ header.topbar .players {
   display: inline-block;
 }
 
-main { flex: 1; display: flex; flex-direction: column; }
+main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
 .lobby-wrap {
   max-width: 720px;
@@ -239,10 +250,18 @@ footer.foot {
   border: 1px solid #ddd3bd;
   border-radius: 6px;
   padding: 5px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.game-toolbar .link-box span {
+  flex-shrink: 0;
 }
 
 .game-toolbar .link-box code {
-  max-width: 260px;
+  min-width: 0;
+  flex-shrink: 1;
+  max-width: min(260px, 40vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -250,25 +269,17 @@ footer.foot {
 
 .table-scroll {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(ellipse at top, rgba(255,255,255,0.05), transparent 65%),
     #4a4d52;
-  padding: 30px;
   position: relative;
 }
 
 .table {
   position: relative;
-  margin: 0 auto;
   cursor: default;
-}
-
-.board-frame {
-  position: absolute;
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 2px;
-  background: rgba(0,0,0,0.08);
 }
 
 .piece {
@@ -276,10 +287,6 @@ footer.foot {
   top: 0; left: 0;
   touch-action: none;
   filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.45));
-}
-
-.piece.locked {
-  filter: drop-shadow(0 0 0 rgba(0,0,0,0));
 }
 
 .remote-cursor {

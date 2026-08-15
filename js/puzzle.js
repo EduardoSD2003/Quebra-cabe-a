@@ -1,4 +1,5 @@
-// Motor do quebra-cabeça: gera as peças a partir de uma imagem, desenha, arrasta e encaixa.
+// Motor do quebra-cabeça: gera as peças a partir de uma imagem, desenha, arrasta e encaixa
+// SOMENTE peça com peça (não existe um "tabuleiro alvo" fixo).
 
 class Puzzle {
   /**
@@ -6,12 +7,11 @@ class Puzzle {
    * @param {HTMLImageElement} opts.image
    * @param {number} opts.rows
    * @param {number} opts.cols
-   * @param {number} opts.boardW - largura do tabuleiro em px na tela
+   * @param {number} opts.boardW - largura de referência (define o tamanho das peças) em px lógicos
    * @param {number} opts.boardH
    * @param {number} opts.seed
-   * @param {HTMLElement} opts.tableEl - container onde tudo é desenhado
-   * @param {HTMLElement} opts.boardFrameEl - retângulo que marca onde é o tabuleiro
-   * @param {Function} opts.onPieceMoved - (id, x, y, groupId, locked, dragging) => void, chamado localmente ao mover/soltar
+   * @param {HTMLElement} opts.tableEl - container onde tudo é desenhado (pode estar escalado via CSS)
+   * @param {Function} opts.onPieceMoved - (piecesPayload, dragging) => void
    * @param {Function} opts.onComplete - () => void
    */
   constructor(opts) {
@@ -21,14 +21,13 @@ class Puzzle {
     this.pad = Math.max(this.pieceW, this.pieceH) * 0.55;
     this.canvasW = this.pieceW + this.pad * 2;
     this.canvasH = this.pieceH + this.pad * 2;
-    this.snapTolerance = Math.min(this.pieceW, this.pieceH) * 0.28;
+    this.snapTolerance = Math.min(this.pieceW, this.pieceH) * 0.32;
+    this.scale = 1; // fator de escala visual aplicado via CSS no tableEl (não afeta coordenadas lógicas)
 
-    this.pieces = new Map(); // id -> piece state/DOM
+    this.pieces = new Map(); // id -> peça
     this.groups = new Map(); // groupId -> Set(pieceId)
     this.pieceGroup = new Map(); // pieceId -> groupId
-    this.remotePositions = new Map(); // posições vindas do servidor, pra não reenviar em loop
     this.zTop = 10;
-    this.locked = new Set();
 
     this._buildEdges();
     this._buildDom();
@@ -40,6 +39,10 @@ class Puzzle {
   }
 
   static idOf(r, c) { return `${r}_${c}`; }
+
+  setScale(scale) {
+    this.scale = scale;
+  }
 
   _buildDom() {
     for (const el of [...this.tableEl.querySelectorAll('.piece')]) el.remove();
@@ -85,30 +88,22 @@ class Puzzle {
     ctx.stroke(path2d);
     ctx.restore();
 
+    canvas.style.zIndex = this.zTop++;
     this.tableEl.appendChild(canvas);
 
-    const correctX = c * this.pieceW - this.pad;
-    const correctY = r * this.pieceH - this.pad;
-
-    canvas.style.zIndex = this.zTop++;
-
-    const piece = {
-      id, r, c, el: canvas, path2d, ctx,
-      correctX, correctY,
-      x: 0, y: 0,
-      locked: false,
-    };
+    const piece = { id, r, c, el: canvas, path2d, ctx, x: 0, y: 0 };
     this.pieces.set(id, piece);
     this.groups.set(id, new Set([id]));
     this.pieceGroup.set(id, id);
   }
 
-  scatter(margin) {
-    const tableW = this.tableEl.clientWidth || this.boardW * 1.8;
-    const tableH = this.tableEl.clientHeight || this.boardH * 1.6;
+  /** Espalha as peças aleatoriamente dentro da área lógica do tableEl. */
+  scatter() {
+    const tableW = this.tableEl.clientWidth || this.boardW * 1.6;
+    const tableH = this.tableEl.clientHeight || this.boardH * 1.5;
     for (const piece of this.pieces.values()) {
-      const x = Math.random() * (tableW - this.canvasW);
-      const y = Math.random() * (tableH - this.canvasH);
+      const x = Math.random() * Math.max(0, tableW - this.canvasW);
+      const y = Math.random() * Math.max(0, tableH - this.canvasH);
       this._setPiecePos(piece, x, y);
     }
   }
@@ -120,22 +115,20 @@ class Puzzle {
   }
 
   /** Aplica posição vinda da rede sem re-emitir evento local */
-  applyRemote(id, x, y, groupId, locked) {
+  applyRemote(id, x, y, groupId) {
     const piece = this.pieces.get(id);
     if (!piece) return;
     this._setPiecePos(piece, x, y);
-    piece.locked = locked;
-    if (locked) this.locked.add(id); else this.locked.delete(id);
     if (groupId && this.pieceGroup.get(id) !== groupId) {
       this._forceGroup(id, groupId);
     }
-    if (locked) piece.el.classList.add('locked'); else piece.el.classList.remove('locked');
     this._checkComplete();
   }
 
   _forceGroup(id, groupId) {
     const old = this.pieceGroup.get(id);
     this.groups.get(old)?.delete(id);
+    if (this.groups.get(old)?.size === 0) this.groups.delete(old);
     this.pieceGroup.set(id, groupId);
     if (!this.groups.has(groupId)) this.groups.set(groupId, new Set());
     this.groups.get(groupId).add(id);
@@ -146,7 +139,6 @@ class Puzzle {
   // transparente ao redor da peça, ou em cima de outra peça, não a arrastam.
   _hitTest(px, py) {
     const candidates = [...this.pieces.values()]
-      .filter(p => !p.locked)
       .sort((a, b) => (parseInt(b.el.style.zIndex) || 0) - (parseInt(a.el.style.zIndex) || 0));
     for (const p of candidates) {
       const localX = px - p.x;
@@ -163,9 +155,11 @@ class Puzzle {
     let pointerId = null;
     let startX, startY, origins;
 
+    // converte coordenadas de tela (px reais) pra coordenadas lógicas do tabuleiro,
+    // desfazendo a escala visual aplicada via CSS transform no tableEl
     const tableXY = (ev) => {
       const rect = this.tableEl.getBoundingClientRect();
-      return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+      return { x: (ev.clientX - rect.left) / this.scale, y: (ev.clientY - rect.top) / this.scale };
     };
 
     this.tableEl.addEventListener('pointerdown', (ev) => {
@@ -196,8 +190,8 @@ class Puzzle {
         this.tableEl.style.cursor = this._hitTest(x, y) ? 'grab' : 'default';
         return;
       }
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      const dx = (ev.clientX - startX) / this.scale;
+      const dy = (ev.clientY - startY) / this.scale;
       for (const o of origins) {
         const p = this.pieces.get(o.id);
         this._setPiecePos(p, o.x + dx, o.y + dy);
@@ -226,16 +220,24 @@ class Puzzle {
     const members = [...this.groups.get(groupId)];
     const payload = members.map(mid => {
       const p = this.pieces.get(mid);
-      return { id: mid, x: p.x, y: p.y, groupId, locked: p.locked };
+      return { id: mid, x: p.x, y: p.y, groupId };
     });
     this.onPieceMoved(payload, dragging);
   }
 
+  _emitGroup(groupId) {
+    if (!this.onPieceMoved) return;
+    const members = [...this.groups.get(groupId)];
+    const payload = members.map(mid => {
+      const p = this.pieces.get(mid);
+      return { id: mid, x: p.x, y: p.y, groupId };
+    });
+    this.onPieceMoved(payload, false);
+  }
+
+  /** Tenta encaixar o grupo da peça arrastada com alguma peça vizinha solta. */
   _trySnap(piece) {
     const groupId = this.pieceGroup.get(piece.id);
-    if (this._tryLockToBoard(groupId)) return;
-
-    // tenta encaixar com peças vizinhas soltas
     const members = [...this.groups.get(groupId)];
     for (const mid of members) {
       const p = this.pieces.get(mid);
@@ -254,39 +256,13 @@ class Puzzle {
             const gp = this.pieces.get(gm);
             this._setPiecePos(gp, gp.x + shiftX, gp.y + shiftY);
           }
-          if (np.locked) {
-            // o vizinho já está fixo no tabuleiro: encostar nele significa que o
-            // grupo arrastado também já está na posição correta — trava direto,
-            // sem misturar peça fixa com peça solta no mesmo grupo arrastável.
-            if (!this._tryLockToBoard(groupId)) this._checkComplete();
-            this._emitGroup(groupId);
-          } else {
-            const mergedGroup = this._mergeGroups(groupId, otherGroup);
-            if (!this._tryLockToBoard(mergedGroup)) this._checkComplete();
-            this._emitGroup(mergedGroup);
-          }
+          const mergedGroup = this._mergeGroups(groupId, otherGroup);
+          this._checkComplete();
+          this._emitGroup(mergedGroup);
           return;
         }
       }
     }
-  }
-
-  // tenta travar um grupo inteiro na posição absoluta correta do tabuleiro
-  _tryLockToBoard(groupId) {
-    const members = [...this.groups.get(groupId)];
-    const anchor = this.pieces.get(members[0]);
-    const dxBoard = anchor.correctX - anchor.x;
-    const dyBoard = anchor.correctY - anchor.y;
-    if (Math.hypot(dxBoard, dyBoard) >= this.snapTolerance) return false;
-    for (const mid of members) {
-      const p = this.pieces.get(mid);
-      this._setPiecePos(p, p.correctX, p.correctY);
-      p.locked = true;
-      this.locked.add(mid);
-      p.el.classList.add('locked');
-    }
-    this._checkComplete();
-    return true;
   }
 
   _gridNeighbors(r, c) {
@@ -310,30 +286,26 @@ class Puzzle {
     return big;
   }
 
-  _emitGroup(groupId) {
-    if (!this.onPieceMoved) return;
-    const members = [...this.groups.get(groupId)];
-    const payload = members.map(mid => {
-      const p = this.pieces.get(mid);
-      return { id: mid, x: p.x, y: p.y, groupId, locked: p.locked };
-    });
-    this.onPieceMoved(payload, false);
+  /** Quantas peças tem no maior grupo já conectado — usado como indicador de progresso. */
+  largestGroupSize() {
+    let max = 0;
+    for (const set of this.groups.values()) max = Math.max(max, set.size);
+    return max;
   }
 
   _checkComplete() {
-    const done = [...this.pieces.values()].every(p => p.locked);
-    if (done && this.onComplete) this.onComplete();
+    if (this.groups.size === 1 && this.onComplete) this.onComplete();
   }
 
   serializeState() {
     return [...this.pieces.values()].map(p => ({
-      id: p.id, x: p.x, y: p.y, groupId: this.pieceGroup.get(p.id), locked: p.locked
+      id: p.id, x: p.x, y: p.y, groupId: this.pieceGroup.get(p.id)
     }));
   }
 
   loadState(list) {
     for (const item of list) {
-      this.applyRemote(item.id, item.x, item.y, item.groupId, item.locked);
+      this.applyRemote(item.id, item.x, item.y, item.groupId);
     }
   }
 }
