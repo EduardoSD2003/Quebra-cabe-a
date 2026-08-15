@@ -254,9 +254,17 @@ class Puzzle {
             const gp = this.pieces.get(gm);
             this._setPiecePos(gp, gp.x + shiftX, gp.y + shiftY);
           }
-          const mergedGroup = this._mergeGroups(groupId, otherGroup);
-          if (!this._tryLockToBoard(mergedGroup)) this._checkComplete();
-          this._emitGroup(mergedGroup);
+          if (np.locked) {
+            // o vizinho já está fixo no tabuleiro: encostar nele significa que o
+            // grupo arrastado também já está na posição correta — trava direto,
+            // sem misturar peça fixa com peça solta no mesmo grupo arrastável.
+            if (!this._tryLockToBoard(groupId)) this._checkComplete();
+            this._emitGroup(groupId);
+          } else {
+            const mergedGroup = this._mergeGroups(groupId, otherGroup);
+            if (!this._tryLockToBoard(mergedGroup)) this._checkComplete();
+            this._emitGroup(mergedGroup);
+          }
           return;
         }
       }

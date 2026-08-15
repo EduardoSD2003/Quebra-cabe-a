@@ -72,15 +72,15 @@ function addEdge(path, x1, y1, x2, y2, tab, jitter) {
     return `${px.toFixed(2)} ${py.toFixed(2)}`;
   };
 
-  const t1 = 0.36 + jitter, t2 = 0.64 + jitter;
-  const head = 0.42;
+  const t1 = 0.30 + jitter, t2 = 0.70 + jitter;
+  const head = 0.26;
 
   const A = pt(t1, 0);
-  const B1 = pt(t1, 0.28);
-  const B2 = pt(0.44, head);
+  const B1 = pt(t1 + 0.08, 0.06);
+  const B2 = pt(0.42, head);
   const P1 = pt(0.5, head);
-  const B3 = pt(0.56, head);
-  const B4 = pt(t2, 0.28);
+  const B3 = pt(0.58, head);
+  const B4 = pt(t2 - 0.08, 0.06);
   const A2 = pt(t2, 0);
 
   path.push(`L ${A}`);
