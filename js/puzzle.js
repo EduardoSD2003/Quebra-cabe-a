@@ -32,6 +32,7 @@ class Puzzle {
 
     this._buildEdges();
     this._buildDom();
+    this._attachGlobalDrag();
   }
 
   _buildEdges() {
@@ -89,8 +90,10 @@ class Puzzle {
     const correctX = c * this.pieceW - this.pad;
     const correctY = r * this.pieceH - this.pad;
 
+    canvas.style.zIndex = this.zTop++;
+
     const piece = {
-      id, r, c, el: canvas, path2d,
+      id, r, c, el: canvas, path2d, ctx,
       correctX, correctY,
       x: 0, y: 0,
       locked: false,
@@ -98,8 +101,6 @@ class Puzzle {
     this.pieces.set(id, piece);
     this.groups.set(id, new Set([id]));
     this.pieceGroup.set(id, id);
-
-    this._attachDrag(piece);
   }
 
   scatter(margin) {
@@ -140,19 +141,46 @@ class Puzzle {
     this.groups.get(groupId).add(id);
   }
 
-  _attachDrag(piece) {
-    const el = piece.el;
+  // Encontra a peça "de cima pra baixo" (por z-index) cujo formato real
+  // (não o retângulo do canvas) contém o ponto — assim cliques na área
+  // transparente ao redor da peça, ou em cima de outra peça, não a arrastam.
+  _hitTest(px, py) {
+    const candidates = [...this.pieces.values()]
+      .filter(p => !p.locked)
+      .sort((a, b) => (parseInt(b.el.style.zIndex) || 0) - (parseInt(a.el.style.zIndex) || 0));
+    for (const p of candidates) {
+      const localX = px - p.x;
+      const localY = py - p.y;
+      if (localX < 0 || localY < 0 || localX > this.canvasW || localY > this.canvasH) continue;
+      if (p.ctx.isPointInPath(p.path2d, localX, localY)) return p;
+    }
+    return null;
+  }
+
+  _attachGlobalDrag() {
     let dragging = false;
+    let activeId = null;
+    let pointerId = null;
     let startX, startY, origins;
 
-    const pointerDown = (ev) => {
-      if (piece.locked) return;
+    const tableXY = (ev) => {
+      const rect = this.tableEl.getBoundingClientRect();
+      return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    };
+
+    this.tableEl.addEventListener('pointerdown', (ev) => {
+      const { x, y } = tableXY(ev);
+      const hit = this._hitTest(x, y);
+      if (!hit) return;
       ev.preventDefault();
       dragging = true;
-      el.setPointerCapture(ev.pointerId);
+      activeId = hit.id;
+      pointerId = ev.pointerId;
+      this.tableEl.setPointerCapture(pointerId);
+      this.tableEl.style.cursor = 'grabbing';
       startX = ev.clientX;
       startY = ev.clientY;
-      const groupId = this.pieceGroup.get(piece.id);
+      const groupId = this.pieceGroup.get(hit.id);
       const members = [...this.groups.get(groupId)];
       origins = members.map(mid => {
         const p = this.pieces.get(mid);
@@ -160,31 +188,36 @@ class Puzzle {
       });
       this.zTop += 1;
       for (const m of members) this.pieces.get(m).el.style.zIndex = this.zTop;
-    };
+    });
 
-    const pointerMove = (ev) => {
-      if (!dragging) return;
+    this.tableEl.addEventListener('pointermove', (ev) => {
+      if (!dragging) {
+        const { x, y } = tableXY(ev);
+        this.tableEl.style.cursor = this._hitTest(x, y) ? 'grab' : 'default';
+        return;
+      }
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
       for (const o of origins) {
         const p = this.pieces.get(o.id);
         this._setPiecePos(p, o.x + dx, o.y + dy);
       }
-      this._emitMove(piece, true);
-    };
+      this._emitMove(this.pieces.get(activeId), true);
+    });
 
-    const pointerUp = (ev) => {
+    const endDrag = (ev) => {
       if (!dragging) return;
       dragging = false;
-      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+      this.tableEl.style.cursor = 'default';
+      try { this.tableEl.releasePointerCapture(pointerId); } catch (e) {}
+      const piece = this.pieces.get(activeId);
       this._trySnap(piece);
       this._emitMove(piece, false);
+      activeId = null;
     };
 
-    el.addEventListener('pointerdown', pointerDown);
-    el.addEventListener('pointermove', pointerMove);
-    el.addEventListener('pointerup', pointerUp);
-    el.addEventListener('pointercancel', pointerUp);
+    this.tableEl.addEventListener('pointerup', endDrag);
+    this.tableEl.addEventListener('pointercancel', endDrag);
   }
 
   _emitMove(piece, dragging) {
