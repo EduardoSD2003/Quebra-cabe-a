@@ -22,11 +22,12 @@ class Puzzle {
    */
   constructor(opts) {
     Object.assign(this, opts);
-    this.pieceW = this.boardW / this.cols;
-    this.pieceH = this.boardH / this.rows;
-    this.pad = Math.max(this.pieceW, this.pieceH) * 0.55;
-    this.canvasW = this.pieceW + this.pad * 2;
-    this.canvasH = this.pieceH + this.pad * 2;
+    const size = computePieceSize(this.boardW, this.boardH, this.rows, this.cols);
+    this.pieceW = size.pieceW;
+    this.pieceH = size.pieceH;
+    this.pad = size.pad;
+    this.canvasW = size.canvasW;
+    this.canvasH = size.canvasH;
     this.snapTolerance = Math.min(this.pieceW, this.pieceH) * 0.32;
     this.scale = 1; // fator de escala visual aplicado via CSS no tableEl (não afeta coordenadas lógicas)
 

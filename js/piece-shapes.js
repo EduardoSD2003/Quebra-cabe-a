@@ -2,6 +2,16 @@
 // Cada aresta interna do grid recebe aleatoriamente um sentido (para fora / para dentro),
 // compartilhado pelas duas peças vizinhas, para que elas se encaixem perfeitamente.
 
+// Tamanho de cada peça e do canvas que a desenha (com a margem pro encaixe
+// "vazar" pra fora da célula). Usado tanto pelo motor do jogo quanto pela
+// tela da sala (pra calcular o tamanho da mesa antes do Puzzle existir).
+function computePieceSize(boardW, boardH, rows, cols) {
+  const pieceW = boardW / cols;
+  const pieceH = boardH / rows;
+  const pad = Math.max(pieceW, pieceH) * 0.55;
+  return { pieceW, pieceH, pad, canvasW: pieceW + pad * 2, canvasH: pieceH + pad * 2 };
+}
+
 function createEdgeMatrices(rows, cols, seed) {
   const rand = mulberry32(seed);
 

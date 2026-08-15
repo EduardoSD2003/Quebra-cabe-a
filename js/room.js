@@ -51,22 +51,29 @@ async function setupGame(room, sync, overlay) {
   const tableScroll = document.getElementById('tableScroll');
 
   const boardW = room.board_w, boardH = room.board_h;
-  // área lógica onde as peças ficam espalhadas. O tamanho mínimo é definido
-  // pelo tabuleiro (+ uma margem pra ter onde espalhar peças), mas o lado que
-  // sobrar é esticado pra bater com a proporção da tela de quem abriu a sala —
-  // assim a área de arrastar usa 100% do espaço visível, sem sobrar faixa
-  // cinza vazia dos lados ou embaixo.
-  const minTableW = boardW + 380;
-  const minTableH = boardH + 280;
+  const totalPieces = room.rows * room.cols;
+  const { canvasW: pieceCanvasW } = computePieceSize(boardW, boardH, room.rows, room.cols);
+
+  // A mesa (área onde as peças podem ficar) sempre acaba preenchendo 100% da
+  // tela depois do ajuste de escala — o que muda o quanto cada peça aparece
+  // "grande" é o tamanho LÓGICO dessa mesa: uma mesa menor = peças relativamente
+  // maiores. Por isso o tamanho é baseado na quantidade de peças (poucas peças
+  // grandes não precisam de uma mesa muito maior que o próprio tabuleiro; muitas
+  // peças pequenas se beneficiam de bem mais espaço pra espalhar).
   const viewportAspect = (tableScroll.clientWidth || 4) / (tableScroll.clientHeight || 3);
-  let tableW, tableH;
-  if (minTableW / minTableH > viewportAspect) {
-    tableW = minTableW;
-    tableH = minTableW / viewportAspect;
-  } else {
-    tableH = minTableH;
-    tableW = minTableH * viewportAspect;
-  }
+  const boardArea = boardW * boardH;
+  const expansion = 1.1 + 0.045 * Math.sqrt(totalPieces);
+  const idealArea = boardArea * expansion;
+
+  // nunca menor que o tabuleiro montado + uma pequena margem
+  const minTableW = boardW + 60, minTableH = boardH + 60;
+  const wFromBoard = Math.max(minTableW, minTableH * viewportAspect);
+  const wFromDensity = Math.sqrt(idealArea * viewportAspect);
+  // nunca tão pequena a ponto da peça precisar ser ampliada demais (borra)
+  const wFromScaleCap = (tableScroll.clientWidth || pieceCanvasW * 4) / 1.3;
+
+  const tableW = Math.max(wFromBoard, wFromDensity, wFromScaleCap);
+  const tableH = tableW / viewportAspect;
   table.style.width = tableW + 'px';
   table.style.height = tableH + 'px';
 
