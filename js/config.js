@@ -7,8 +7,8 @@
 // 4. Rode o conteúdo de supabase-schema.sql no "SQL Editor" do projeto
 // Veja o README.md para o passo a passo completo.
 
-const SUPABASE_URL = 'COLE_AQUI_A_SUA_PROJECT_URL';
-const SUPABASE_ANON_KEY = 'COLE_AQUI_A_SUA_ANON_KEY';
+const SUPABASE_URL = 'https://qkgueeehsherudchqvyp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrZ3VlZWVoc2hlcnVkY2hxdnlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3ODc3NTUsImV4cCI6MjEwMjM2Mzc1NX0.JEb-pQmXG__pyRlHu1kv8l4AEbboRhSciNy9y0Ncv1c';
 
 function isSupabaseConfigured() {
   return SUPABASE_URL && SUPABASE_ANON_KEY &&
