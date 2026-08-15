@@ -1,5 +1,11 @@
 // Motor do quebra-cabeça: gera as peças a partir de uma imagem, desenha, arrasta e encaixa
 // SOMENTE peça com peça (não existe um "tabuleiro alvo" fixo).
+//
+// Importante: quais peças estão "conectadas" (e por isso se movem juntas) NUNCA é
+// sincronizado pela rede como um dado à parte — é sempre recalculado a partir das
+// posições x/y atuais de cada peça (que são sincronizadas de forma simples e
+// confiável). Isso garante que dois jogadores nunca "discordem" sobre quais peças
+// estão encaixadas, mesmo arrastando peças ao mesmo tempo.
 
 class Puzzle {
   /**
@@ -25,12 +31,13 @@ class Puzzle {
     this.scale = 1; // fator de escala visual aplicado via CSS no tableEl (não afeta coordenadas lógicas)
 
     this.pieces = new Map(); // id -> peça
-    this.groups = new Map(); // groupId -> Set(pieceId)
+    this.groups = new Map(); // groupId -> Set(pieceId) — sempre recalculado, nunca sincronizado
     this.pieceGroup = new Map(); // pieceId -> groupId
     this.zTop = 10;
 
     this._buildEdges();
     this._buildDom();
+    this._recomputeGroups();
     this._attachGlobalDrag();
   }
 
@@ -93,8 +100,6 @@ class Puzzle {
 
     const piece = { id, r, c, el: canvas, path2d, ctx, x: 0, y: 0 };
     this.pieces.set(id, piece);
-    this.groups.set(id, new Set([id]));
-    this.pieceGroup.set(id, id);
   }
 
   /** Espalha as peças aleatoriamente dentro da área lógica do tableEl. */
@@ -114,24 +119,46 @@ class Puzzle {
     piece.el.style.transform = `translate(${x}px, ${y}px)`;
   }
 
-  /** Aplica posição vinda da rede sem re-emitir evento local */
-  applyRemote(id, x, y, groupId) {
+  _tableBounds() {
+    return {
+      w: this.tableEl.clientWidth || this.boardW * 1.6,
+      h: this.tableEl.clientHeight || this.boardH * 1.5,
+    };
+  }
+
+  /** Aplica posição vinda da rede sem re-emitir evento local. */
+  applyRemote(id, x, y) {
     const piece = this.pieces.get(id);
     if (!piece) return;
     this._setPiecePos(piece, x, y);
-    if (groupId && this.pieceGroup.get(id) !== groupId) {
-      this._forceGroup(id, groupId);
-    }
-    this._checkComplete();
   }
 
-  _forceGroup(id, groupId) {
-    const old = this.pieceGroup.get(id);
-    this.groups.get(old)?.delete(id);
-    if (this.groups.get(old)?.size === 0) this.groups.delete(old);
-    this.pieceGroup.set(id, groupId);
-    if (!this.groups.has(groupId)) this.groups.set(groupId, new Set());
-    this.groups.get(groupId).add(id);
+  /**
+   * Recalcula do zero quais peças estão conectadas, olhando só as posições
+   * atuais e comparando cada peça com seus vizinhos de grade. Determinístico:
+   * sempre dá o mesmo resultado em qualquer cliente que tenha as mesmas
+   * posições, então nunca diverge entre jogadores.
+   */
+  _recomputeGroups() {
+    this.groups = new Map();
+    this.pieceGroup = new Map();
+    for (const id of this.pieces.keys()) {
+      this.groups.set(id, new Set([id]));
+      this.pieceGroup.set(id, id);
+    }
+    for (const piece of this.pieces.values()) {
+      for (const n of this._gridNeighbors(piece.r, piece.c)) {
+        const np = this.pieces.get(n.id);
+        const expectedX = np.x - n.dc * this.pieceW;
+        const expectedY = np.y - n.dr * this.pieceH;
+        if (Math.hypot(expectedX - piece.x, expectedY - piece.y) < this.snapTolerance) {
+          const gA = this.pieceGroup.get(piece.id);
+          const gB = this.pieceGroup.get(n.id);
+          if (gA !== gB) this._mergeGroups(gA, gB);
+        }
+      }
+    }
+    this._checkComplete();
   }
 
   // Encontra a peça "de cima pra baixo" (por z-index) cujo formato real
@@ -170,7 +197,7 @@ class Puzzle {
       dragging = true;
       activeId = hit.id;
       pointerId = ev.pointerId;
-      this.tableEl.setPointerCapture(pointerId);
+      try { this.tableEl.setPointerCapture(pointerId); } catch (e) {}
       this.tableEl.style.cursor = 'grabbing';
       startX = ev.clientX;
       startY = ev.clientY;
@@ -190,8 +217,19 @@ class Puzzle {
         this.tableEl.style.cursor = this._hitTest(x, y) ? 'grab' : 'default';
         return;
       }
-      const dx = (ev.clientX - startX) / this.scale;
-      const dy = (ev.clientY - startY) / this.scale;
+      let dx = (ev.clientX - startX) / this.scale;
+      let dy = (ev.clientY - startY) / this.scale;
+
+      // não deixa o grupo arrastado sair da área de jogo
+      const { w: tableW, h: tableH } = this._tableBounds();
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const o of origins) {
+        minX = Math.min(minX, o.x); maxX = Math.max(maxX, o.x);
+        minY = Math.min(minY, o.y); maxY = Math.max(maxY, o.y);
+      }
+      dx = Math.min(Math.max(dx, -minX), Math.max(0, tableW - this.canvasW - maxX));
+      dy = Math.min(Math.max(dy, -minY), Math.max(0, tableH - this.canvasH - maxY));
+
       for (const o of origins) {
         const p = this.pieces.get(o.id);
         this._setPiecePos(p, o.x + dx, o.y + dy);
@@ -220,34 +258,23 @@ class Puzzle {
     const members = [...this.groups.get(groupId)];
     const payload = members.map(mid => {
       const p = this.pieces.get(mid);
-      return { id: mid, x: p.x, y: p.y, groupId };
+      return { id: mid, x: p.x, y: p.y };
     });
     this.onPieceMoved(payload, dragging);
   }
 
-  _emitGroup(groupId) {
-    if (!this.onPieceMoved) return;
-    const members = [...this.groups.get(groupId)];
-    const payload = members.map(mid => {
-      const p = this.pieces.get(mid);
-      return { id: mid, x: p.x, y: p.y, groupId };
-    });
-    this.onPieceMoved(payload, false);
-  }
-
-  /** Tenta encaixar o grupo da peça arrastada com alguma peça vizinha solta. */
+  /** Ajusta a posição exata (encaixe visual) se o grupo arrastado ficou perto
+   *  o bastante de um vizinho, e recalcula as conexões a partir disso. */
   _trySnap(piece) {
     const groupId = this.pieceGroup.get(piece.id);
     const members = [...this.groups.get(groupId)];
     for (const mid of members) {
       const p = this.pieces.get(mid);
-      const neighbors = this._gridNeighbors(p.r, p.c);
-      for (const n of neighbors) {
+      for (const n of this._gridNeighbors(p.r, p.c)) {
         const np = this.pieces.get(n.id);
-        const otherGroup = this.pieceGroup.get(n.id);
-        if (otherGroup === groupId) continue;
-        const expectedX = np.x - (n.dc * this.pieceW);
-        const expectedY = np.y - (n.dr * this.pieceH);
+        if (this.pieceGroup.get(n.id) === groupId) continue;
+        const expectedX = np.x - n.dc * this.pieceW;
+        const expectedY = np.y - n.dr * this.pieceH;
         const dist = Math.hypot(expectedX - p.x, expectedY - p.y);
         if (dist < this.snapTolerance) {
           const shiftX = expectedX - p.x;
@@ -256,9 +283,8 @@ class Puzzle {
             const gp = this.pieces.get(gm);
             this._setPiecePos(gp, gp.x + shiftX, gp.y + shiftY);
           }
-          const mergedGroup = this._mergeGroups(groupId, otherGroup);
-          this._checkComplete();
-          this._emitGroup(mergedGroup);
+          this._recomputeGroups();
+          this._emitMove(this.pieces.get(mid), false);
           return;
         }
       }
@@ -298,14 +324,11 @@ class Puzzle {
   }
 
   serializeState() {
-    return [...this.pieces.values()].map(p => ({
-      id: p.id, x: p.x, y: p.y, groupId: this.pieceGroup.get(p.id)
-    }));
+    return [...this.pieces.values()].map(p => ({ id: p.id, x: p.x, y: p.y }));
   }
 
   loadState(list) {
-    for (const item of list) {
-      this.applyRemote(item.id, item.x, item.y, item.groupId);
-    }
+    for (const item of list) this.applyRemote(item.id, item.x, item.y);
+    this._recomputeGroups();
   }
 }

@@ -114,7 +114,8 @@ async function setupGame(room, sync, overlay) {
 
   sync.onPeerMove = (pieces) => {
     suppressEmit = true;
-    for (const p of pieces) puzzle.applyRemote(p.id, p.x, p.y, p.groupId);
+    for (const p of pieces) puzzle.applyRemote(p.id, p.x, p.y);
+    puzzle._recomputeGroups();
     suppressEmit = false;
     updateProgress();
   };
