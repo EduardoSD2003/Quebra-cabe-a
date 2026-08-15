@@ -66,27 +66,32 @@ function addEdge(path, x1, y1, x2, y2, tab, jitter) {
   const nx = -uy * tab, ny = ux * tab;
 
   const pt = (t, o) => {
-    const tt = t;
-    const px = x1 + ux * len * tt + nx * len * o;
-    const py = y1 + uy * len * tt + ny * len * o;
-    return `${px.toFixed(2)} ${py.toFixed(2)}`;
+    const px = x1 + ux * len * t + nx * len * o;
+    const py = y1 + uy * len * t + ny * len * o;
+    return { x: px, y: py, s: `${px.toFixed(2)} ${py.toFixed(2)}` };
   };
 
-  const t1 = 0.30 + jitter, t2 = 0.70 + jitter;
-  const head = 0.28;
-  const shoulder = 0.20;
+  // Formato clássico: base reta -> pescoço reto e fino -> cabeça circular -> espelho.
+  const t1 = 0.34 + jitter, t2 = 0.66 + jitter;
+  const neckO = 0.16;
+  const r = 0.16;
 
   const A = pt(t1, 0);
-  const B1 = pt(t1 + 0.08, 0.06);
-  const B2 = pt(0.40, shoulder);
-  const P1 = pt(0.5, head);
-  const B3 = pt(0.60, shoulder);
-  const B4 = pt(t2 - 0.08, 0.06);
+  const NL = pt(0.5 - r * 0.92, neckO);
+  const NR = pt(0.5 + r * 0.92, neckO);
   const A2 = pt(t2, 0);
+  const radius = (r * len).toFixed(2);
 
-  path.push(`L ${A}`);
-  path.push(`C ${B1}, ${B2}, ${P1}`);
-  path.push(`C ${B3}, ${B4}, ${A2}`);
+  // O mapeamento (t,o)->(x,y) é uma rotação quando tab>0 e um espelhamento
+  // quando tab<0 (o sinal do tab entra no determinante da transformação),
+  // então a "sweep-flag" do arco SVG precisa inverter junto pra continuar
+  // curvando pro lado de fora em vez de voltar pra dentro da peça.
+  const sweep = tab > 0 ? 0 : 1;
+
+  path.push(`L ${A.s}`);
+  path.push(`L ${NL.s}`);
+  path.push(`A ${radius} ${radius} 0 1 ${sweep} ${NR.s}`);
+  path.push(`L ${A2.s}`);
   path.push(`L ${x2} ${y2}`);
 }
 

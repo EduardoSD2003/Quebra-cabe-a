@@ -18,7 +18,7 @@ class Puzzle {
     Object.assign(this, opts);
     this.pieceW = this.boardW / this.cols;
     this.pieceH = this.boardH / this.rows;
-    this.pad = Math.max(this.pieceW, this.pieceH) * 0.45;
+    this.pad = Math.max(this.pieceW, this.pieceH) * 0.55;
     this.canvasW = this.pieceW + this.pad * 2;
     this.canvasH = this.pieceH + this.pad * 2;
     this.snapTolerance = Math.min(this.pieceW, this.pieceH) * 0.28;
