@@ -104,12 +104,45 @@ class Puzzle {
     this.pieces.set(id, piece);
   }
 
-  /** Espalha as peças aleatoriamente dentro da área lógica do tableEl. */
+  /**
+   * Espalha as peças por toda a área disponível (incluindo as bordas).
+   * Em vez de só sortear posições aleatórias soltas (que por sorte podem
+   * acabar todas longe das bordas, deixando uma moldura vazia), organiza
+   * as peças numa grade que cobre a área inteira, com uma posição
+   * aleatória (jitter) dentro de cada célula — garante que toda região,
+   * incluindo cantos e bordas, sempre fica coberta por alguma peça perto.
+   */
   scatter() {
     const { minX, maxX, minY, maxY } = this._dragBounds();
+    const areaW = Math.max(1, maxX - minX);
+    const areaH = Math.max(1, maxY - minY);
+    const n = this.pieces.size;
+
+    const cols = Math.max(1, Math.round(Math.sqrt((n * areaW) / areaH)));
+    const rows = Math.max(1, Math.ceil(n / cols));
+
+    const cells = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ r, c });
+    for (let i = cells.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+
+    // Cada célula é uma fatia de [minX,maxX] x [minY,maxY] (o intervalo cheio
+    // de posições válidas da peça, já contando o tamanho dela) — a posição é
+    // sorteada dentro da fatia da própria peça, então a primeira coluna/linha
+    // sempre alcança minX/minY e a última sempre alcança perto de maxX/maxY,
+    // não importa se a peça é bem menor que a célula.
+    let i = 0;
     for (const piece of this.pieces.values()) {
-      const x = minX + Math.random() * Math.max(0, maxX - minX);
-      const y = minY + Math.random() * Math.max(0, maxY - minY);
+      const cell = cells[i % cells.length];
+      i++;
+      const xStart = minX + (cell.c / cols) * areaW;
+      const xEnd = minX + ((cell.c + 1) / cols) * areaW;
+      const yStart = minY + (cell.r / rows) * areaH;
+      const yEnd = minY + ((cell.r + 1) / rows) * areaH;
+      const x = xStart + Math.random() * Math.max(0, xEnd - xStart);
+      const y = yStart + Math.random() * Math.max(0, yEnd - yStart);
       this._setPiecePos(piece, x, y);
     }
   }
